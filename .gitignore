@@ -1,0 +1,4 @@
+node_modules/
+dist/
+# Herní grafika se generuje příkazem `npm run sprites`
+public/assets/
