@@ -61,6 +61,7 @@ export class GameScene extends Phaser.Scene {
   private tauntClicked = false;
   private bot = false;
   private speed = 1;
+  private barkAt = 0;
 
   constructor() {
     super('game');
@@ -100,6 +101,7 @@ export class GameScene extends Phaser.Scene {
     this.dead = false;
     this.pauseLabel = null;
     this.decor.clear();
+    this.barkAt = this.elapsed + 3;
 
     this.ground = this.add.tileSprite(0, 0, GAME_W, GAME_H, 'grass').setOrigin(0).setScrollFactor(0).setDepth(-1e9);
 
@@ -165,6 +167,7 @@ export class GameScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE) || this.tauntClicked || this.botWantsTaunt()) this.taunt();
     this.tauntClicked = false;
     this.moveEnemies();
+    this.enemyBark();
     this.updateShots();
     this.spawnEnemies(dt);
     this.autoAttack(dt);
@@ -324,7 +327,7 @@ export class GameScene extends Phaser.Scene {
       const def = BOSSES[(this.bossCount - 1) % BOSSES.length];
       this.boss = this.spawn(def, x, y, 1 + (this.bossCount - 1) * 0.6);
       this.boss.setPushable(false);
-      this.banner(`${def.name.toUpperCase()} PŘICHÁZÍ!\n${def.boss!.quote}`, '#e0483a');
+      this.banner(`${def.name.toUpperCase()} PŘICHÁZÍ!\n${Phaser.Utils.Array.GetRandom(def.quotes)}`, '#e0483a');
       audio.play('boss');
     }
 
@@ -365,6 +368,26 @@ export class GameScene extends Phaser.Scene {
       if (def.boss && this.bossAct(e, def)) continue;
       this.physics.moveToObject(e, p, def.speed + (def.boss ? 0 : bonus));
     }
+  }
+
+  // Hlášky: jednou za pár vteřin něco zakřičí náhodný politik poblíž hráče; boss má přednost.
+  private enemyBark() {
+    if (this.elapsed < this.barkAt) return;
+    this.barkAt = this.elapsed + 3 + Math.random() * 2.5;
+    const p = this.player;
+    const near = (this.enemies.getChildren() as Sprite[]).filter(
+      (e) => Math.abs(e.x - p.x) < 800 && Math.abs(e.y - p.y) < 420,
+    );
+    if (near.length === 0) return;
+    const boss = near.find((e) => (e.getData('def') as EnemyDef).boss);
+    const speaker = boss && Math.random() < 0.6 ? boss : Phaser.Utils.Array.GetRandom(near);
+    const def = speaker.getData('def') as EnemyDef;
+    this.say(speaker, Phaser.Utils.Array.GetRandom(def.quotes), def.boss ? '#ffd27a' : '#fff3c4');
+  }
+
+  private say(e: Sprite, text: string, color: string) {
+    const big = !!(e.getData('def') as EnemyDef).boss;
+    this.float(e.x, e.y - e.displayHeight - 14, text, color, big ? 38 : 28, 2000);
   }
 
   // Schopnost bosse. Vrací true, když boss v tomhle snímku nemá jít za hráčem (rozjezd).
@@ -459,10 +482,12 @@ export class GameScene extends Phaser.Scene {
         drop(e.x + Math.cos(a) * r, e.y + Math.sin(a) * r, def.xp);
       }
       this.hp = Math.min(this.stats.maxHp, this.hp + 50);
-      this.banner(`${def.name.toUpperCase()} BYL ODVOLÁN!`, '#f6d76a');
+      this.banner(`${def.name.toUpperCase()} BYL ODVOLÁN!\n${def.defeat}`, '#f6d76a');
       this.cameras.main.flash(250, 255, 240, 200);
     } else {
       drop(e.x, e.y - 12, def.xp);
+      // Občas odvolaný politik ještě něco prohlásí.
+      if (Math.random() < 0.08) this.say(e, def.defeat, '#c8ccd4');
     }
     // Odvolaný politik zmizí v obláčku
     const puff = this.add.circle(e.x, e.y - e.displayHeight * 0.3, e.displayWidth * 0.25, 0xffffff, 0.7).setDepth(e.y);

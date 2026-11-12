@@ -33,11 +33,10 @@ save(
   ]),
 );
 
-// Politici: běžní nepřátelé 48×48, bossové 96×96 (viz src/enemies.ts).
+// Politici: všichni na mřížce 72×72; bossové se ve hře jen víc zvětší (viz src/enemies.ts).
 const regular = ['fiala', 'rakusan', 'zeman', 'okamura'];
 const bosses = ['babis', 'turek', 'bartos'];
-for (const id of regular) save(`${id}.png`, sheet([drawPolitician(id, 0), drawPolitician(id, 1)]));
-for (const id of bosses) save(`${id}.png`, sheet([drawPolitician(id, 0, 2), drawPolitician(id, 1, 2)]));
+for (const id of [...regular, ...bosses]) save(`${id}.png`, sheet([drawPolitician(id, 0), drawPolitician(id, 1)]));
 save('leaflet.png', drawLeaflet());
 save('donut.png', drawDonut());
 save('pixel.png', drawPixelShot());
@@ -49,13 +48,13 @@ save('gem.png', drawGem());
 save('grass.png', drawGrass().scaled(2));
 
 // Kontrolní přehled všech politiků (jen pro oko, hra ho nepoužívá).
-const all = [...regular.map((id) => drawPolitician(id, 0, 2)), ...bosses.map((id) => drawPolitician(id, 0, 2))];
-const overview = new Canvas(all.reduce((w, s) => w + s.w * 2 + 12, 12), 96 * 2 + 24);
+const all = [...regular, ...bosses].map((id) => drawPolitician(id, 0));
+const overview = new Canvas(all.reduce((w, s) => w + s.w * 3 + 12, 12), 72 * 3 + 24);
 overview.clear('#3f6b3a');
 let ox = 12;
 for (const s of all) {
-  overview.blit(s, ox, 12, 2);
-  ox += s.w * 2 + 12;
+  overview.blit(s, ox, 12, 3);
+  ox += s.w * 3 + 12;
 }
 fs.mkdirSync(path.join(root, 'design'), { recursive: true });
 fs.writeFileSync(path.join(root, 'design', 'politici-prehled.png'), encodePNG(overview));
