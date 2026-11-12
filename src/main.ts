@@ -10,7 +10,8 @@ document.fonts
   .load('700 32px "Pixelify Sans"', 'GoDS ěščřžýáíéůúňťď')
   .catch(() => undefined)
   .then(() => {
-    new Phaser.Game({
+    // Při vývoji je hra dostupná v konzoli jako window.__game (na ruční krokování a ladění).
+    (window as { __game?: Phaser.Game }).__game = new Phaser.Game({
       type: Phaser.AUTO,
       parent: 'game',
       width: GAME_W,

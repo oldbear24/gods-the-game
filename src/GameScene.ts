@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { CHARACTERS, type CharacterDef, type Stats } from './characters';
-import { ENEMIES, BOSS, BOSS_INTERVAL, type EnemyDef } from './enemies';
+import { ENEMIES, BOSSES, BOSS_INTERVAL, type EnemyDef } from './enemies';
 import { UPGRADES, type Upgrade } from './upgrades';
 import { audio } from './audio';
 import { addScore, type Run } from './scores';
@@ -93,7 +93,7 @@ export class GameScene extends Phaser.Scene {
     this.tauntReadyAt = 0;
     this.tauntUntil = 0;
     this.nextBossAt = Number(params.get('boss') ?? BOSS_INTERVAL);
-    this.bossCount = 0;
+    this.bossCount = Number(params.get('skip') ?? 0);
     this.boss = null;
     this.paused = false;
     this.choosing = false;
@@ -226,7 +226,7 @@ export class GameScene extends Phaser.Scene {
 
     for (const e of [...this.enemies.getChildren()] as Sprite[]) {
       const dist = Phaser.Math.Distance.Between(p.x, p.y, e.x, e.y);
-      // Velké příšery (boss) se počítají od okraje těla, ne od středu.
+      // Velcí nepřátelé (boss) se počítají od okraje těla, ne od středu.
       const reach = range + (e.getData('def') as EnemyDef).body[0] * e.scaleX * 0.6;
       if (dist > reach) continue;
       const diff = Phaser.Math.Angle.Wrap(Phaser.Math.Angle.Between(p.x, p.y, e.x, e.y) - angle);
@@ -242,7 +242,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: slash, alpha: 0, duration: 200, onComplete: () => slash.destroy() });
   }
 
-  // Provokace: odhodí a omráčí příšery kolem, na pár vteřin půlí přijaté poškození.
+  // Provokace: odhodí a omráčí nepřátele kolem, na pár vteřin půlí přijaté poškození.
   private taunt() {
     if (this.elapsed < this.tauntReadyAt) return;
     this.tauntReadyAt = this.elapsed + this.stats.tauntCooldown;
@@ -275,7 +275,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // Zásah hráče. Střely ignorují krátkou nezranitelnost po doteku příšery.
+  // Zásah hráče. Střely ignorují krátkou nezranitelnost po doteku nepřítele.
   private takeDamage(amount: number, ignoreCooldown = false) {
     if (this.dead) return;
     if (!ignoreCooldown) {
@@ -298,14 +298,14 @@ export class GameScene extends Phaser.Scene {
     if (this.hp <= 0) this.die();
   }
 
-  // ---------- příšery ----------
+  // ---------- nepřátelé ----------
 
   private spawn(def: EnemyDef, x: number, y: number, hpScale: number) {
     const e = this.enemies.create(x, y, def.sheet) as Sprite;
     e.setScale(def.scale).setOrigin(0.5, def.originY);
     e.setCircle(...def.body);
     e.play({ key: def.id, startFrame: Phaser.Math.Between(0, 1) });
-    e.setData({ def, hp: def.hp * hpScale, maxHp: def.hp * hpScale, stun: 0, actAt: this.elapsed + 1.5 });
+    e.setData({ def, hp: def.hp * hpScale, maxHp: def.hp * hpScale, stun: 0, actAt: this.elapsed + 1.5, windupUntil: 0, chargeUntil: 0 });
     return e;
   }
 
@@ -320,9 +320,11 @@ export class GameScene extends Phaser.Scene {
       this.nextBossAt += BOSS_INTERVAL;
       this.bossCount++;
       const [x, y] = ringPoint();
-      this.boss = this.spawn(BOSS, x, y, this.bossCount);
+      // Bossové se střídají; každé další kolo mají víc životů.
+      const def = BOSSES[(this.bossCount - 1) % BOSSES.length];
+      this.boss = this.spawn(def, x, y, 1 + (this.bossCount - 1) * 0.6);
       this.boss.setPushable(false);
-      this.banner(`${BOSS.name.toUpperCase()} PŘICHÁZÍ!`, '#e0483a');
+      this.banner(`${def.name.toUpperCase()} PŘICHÁZÍ!\n${def.boss!.quote}`, '#e0483a');
       audio.play('boss');
     }
 
@@ -354,26 +356,67 @@ export class GameScene extends Phaser.Scene {
         e.setVelocity(0, 0);
         if (this.elapsed >= (e.getData('actAt') as number)) {
           e.setData('actAt', this.elapsed + def.ranged.cooldown);
-          const shot = this.shots.create(e.x, e.y - 50, 'orb') as Sprite;
-          shot.setScale(2).setCircle(4, 2, 2).setDepth(UI_DEPTH - 10);
-          shot.setData({ damage: def.ranged.damage, dieAt: this.elapsed + 4 });
-          const a = Phaser.Math.Angle.Between(shot.x, shot.y, p.x, p.y - 60);
-          shot.setVelocity(Math.cos(a) * def.ranged.speed, Math.sin(a) * def.ranged.speed);
-          audio.play('shot');
+          const a = Phaser.Math.Angle.Between(e.x, e.y - 50, p.x, p.y - 60);
+          this.fireShot(e.x, e.y - 50, a, def.ranged);
         }
         continue;
       }
 
+      if (def.boss && this.bossAct(e, def)) continue;
       this.physics.moveToObject(e, p, def.speed + (def.boss ? 0 : bonus));
-      // Boss průběžně přivolává slizy.
-      if (def.boss && this.elapsed >= (e.getData('actAt') as number)) {
-        e.setData('actAt', this.elapsed + 6);
-        for (let i = 0; i < 4; i++) {
-          const a = (i / 4) * Math.PI * 2 + Math.random();
-          this.spawn(ENEMIES[0], e.x + Math.cos(a) * 150, e.y + Math.sin(a) * 150, 1 + this.elapsed / 150);
-        }
-      }
     }
+  }
+
+  // Schopnost bosse. Vrací true, když boss v tomhle snímku nemá jít za hráčem (rozjezd).
+  private bossAct(e: Sprite, def: EnemyDef) {
+    const boss = def.boss!;
+    const p = this.player;
+    const now = this.elapsed;
+    const ready = now >= (e.getData('actAt') as number);
+
+    if (boss.ability === 'charge') {
+      if (now < (e.getData('chargeUntil') as number)) return true; // jede v přímce
+      const windupUntil = e.getData('windupUntil') as number;
+      if (windupUntil > 0) {
+        e.setVelocity(0, 0);
+        if (now >= windupUntil) {
+          const a = Phaser.Math.Angle.Between(e.x, e.y, p.x, p.y);
+          e.setVelocity(Math.cos(a) * 640, Math.sin(a) * 640);
+          e.setData({ windupUntil: 0, chargeUntil: now + 0.9 });
+          e.clearTint();
+          audio.play('taunt');
+        }
+        return true;
+      }
+      if (ready) {
+        // Krátké varování před rozjezdem
+        e.setData({ actAt: now + boss.cooldown, windupUntil: now + 0.7 });
+        e.setTint(0xffe060);
+        return true;
+      }
+      return false;
+    }
+
+    if (ready && boss.shot) {
+      e.setData('actAt', now + boss.cooldown);
+      const y = e.y - e.displayHeight * 0.4;
+      const aim = Phaser.Math.Angle.Between(e.x, y, p.x, p.y - 60);
+      const angles =
+        boss.ability === 'spread'
+          ? [-0.28, 0, 0.28].map((d) => aim + d)
+          : Array.from({ length: 12 }, (_, i) => aim + (i / 12) * Math.PI * 2);
+      for (const a of angles) this.fireShot(e.x, y, a, boss.shot);
+    }
+    return false;
+  }
+
+  private fireShot(x: number, y: number, angle: number, spec: { sprite: string; speed: number; damage: number }) {
+    const shot = this.shots.create(x, y, spec.sprite) as Sprite;
+    const r = shot.width / 2 - 2;
+    shot.setScale(2).setCircle(r, 2, 2).setDepth(UI_DEPTH - 10);
+    shot.setData({ damage: spec.damage, dieAt: this.elapsed + 4 });
+    shot.setVelocity(Math.cos(angle) * spec.speed, Math.sin(angle) * spec.speed);
+    audio.play('shot');
   }
 
   private updateShots() {
@@ -416,12 +459,12 @@ export class GameScene extends Phaser.Scene {
         drop(e.x + Math.cos(a) * r, e.y + Math.sin(a) * r, def.xp);
       }
       this.hp = Math.min(this.stats.maxHp, this.hp + 50);
-      this.banner(`${def.name.toUpperCase()} PADL!`, '#f6d76a');
+      this.banner(`${def.name.toUpperCase()} BYL ODVOLÁN!`, '#f6d76a');
       this.cameras.main.flash(250, 255, 240, 200);
     } else {
       drop(e.x, e.y - 12, def.xp);
     }
-    // Obláček po smrti
+    // Odvolaný politik zmizí v obláčku
     const puff = this.add.circle(e.x, e.y - e.displayHeight * 0.3, e.displayWidth * 0.25, 0xffffff, 0.7).setDepth(e.y);
     this.tweens.add({ targets: puff, scale: 1.8, alpha: 0, duration: 220, onComplete: () => puff.destroy() });
     e.destroy();
@@ -558,7 +601,7 @@ export class GameScene extends Phaser.Scene {
     ui(this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x000000, 0.72));
     ui(this.label(GAME_W / 2, 150, `${this.def.name.toUpperCase()} PADL`, 110, '#e0483a'));
     ui(this.label(GAME_W / 2, 260, Phaser.Utils.Array.GetRandom(this.def.quotes.death), 42, '#e8e6e1'));
-    const stats = `Přežil ${formatTime(this.elapsed)}   ·   level ${this.level}   ·   ${this.kills} zabitých příšer`;
+    const stats = `Přežil ${formatTime(this.elapsed)}   ·   level ${this.level}   ·   ${this.kills} odvolaných politiků`;
     ui(this.label(GAME_W / 2, 370, stats, 40, '#e8e6e1'));
     const verdict = rank === 1 ? 'Nový rekord!' : rank > 0 ? `${rank}. místo v žebříčku` : 'Do žebříčku to nestačilo.';
     ui(this.label(GAME_W / 2, 440, verdict, 40, rank === 1 ? '#ee8a3c' : '#9a9fa8'));
@@ -652,7 +695,7 @@ export class GameScene extends Phaser.Scene {
     this.hudHp.setText(`${Math.ceil(this.hp)} / ${this.stats.maxHp}`);
     this.hudLevel.setText(`Level ${this.level}`);
     this.hudTime.setText(formatTime(this.elapsed));
-    this.hudKills.setText(`Zabito: ${this.kills}`);
+    this.hudKills.setText(`Odvoláno: ${this.kills}`);
     // Provokace
     const wait = this.tauntReadyAt - this.elapsed;
     const ready = wait <= 0;
@@ -671,7 +714,7 @@ export class GameScene extends Phaser.Scene {
       const ratio = (boss.getData('hp') as number) / (boss.getData('maxHp') as number);
       g.fillStyle(0x000000, 0.6).fillRect(GAME_W / 2 - 404, GAME_H - 94, 808, 38);
       g.fillStyle(0xc8324a, 1).fillRect(GAME_W / 2 - 400, GAME_H - 90, 800 * Math.max(0, ratio), 30);
-      this.hudBoss.setText(BOSS.name);
+      this.hudBoss.setText((boss.getData('def') as EnemyDef).name);
     }
   }
 }

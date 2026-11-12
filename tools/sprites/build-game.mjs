@@ -4,8 +4,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Canvas, encodePNG } from './px.mjs';
 import { drawTruplik } from './truplik.mjs';
-import { drawSlime, drawGem, drawGrass } from './props.mjs';
-import * as M from './monsters.mjs';
+import { drawGem, drawGrass } from './props.mjs';
+import { drawTree, drawRock, drawBush } from './monsters.mjs';
+import { drawPolitician, drawLeaflet, drawDonut, drawPixelShot } from './politicians.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const outDir = path.join(root, 'public', 'assets');
@@ -31,27 +32,31 @@ save(
     drawTruplik('c', { bob: 1, swing: true }),
   ]),
 );
-save('slime.png', sheet([drawSlime(0), drawSlime(1)]));
-save('bat.png', sheet([M.drawBat(0), M.drawBat(1)]));
-save('skeleton.png', sheet([M.drawSkeleton(0), M.drawSkeleton(1)]));
-save('goblin.png', sheet([M.drawGoblin(0), M.drawGoblin(1)]));
-save('king.png', sheet([M.drawSlimeKing(0), M.drawSlimeKing(1)]));
-save('orb.png', M.drawOrb());
-save('tree.png', M.drawTree());
-save('rock.png', M.drawRock());
-save('bush.png', M.drawBush());
-save('gem.png', drawGem());
 
-// Kontrolní přehled všech příšer a dekorací (jen pro oko, hra ho nepoužívá).
-const all = [M.drawBat(0), M.drawBat(1), M.drawSkeleton(0), M.drawGoblin(0), M.drawOrb(), M.drawSlimeKing(0), M.drawTree(), M.drawRock(), M.drawBush()];
-const overview = new Canvas(all.reduce((w, s) => w + s.w * 3 + 12, 12), 96 * 3 + 24);
+// Politici: běžní nepřátelé 48×48, bossové 96×96 (viz src/enemies.ts).
+const regular = ['fiala', 'rakusan', 'zeman', 'okamura'];
+const bosses = ['babis', 'turek', 'bartos'];
+for (const id of regular) save(`${id}.png`, sheet([drawPolitician(id, 0), drawPolitician(id, 1)]));
+for (const id of bosses) save(`${id}.png`, sheet([drawPolitician(id, 0, 2), drawPolitician(id, 1, 2)]));
+save('leaflet.png', drawLeaflet());
+save('donut.png', drawDonut());
+save('pixel.png', drawPixelShot());
+
+save('tree.png', drawTree());
+save('rock.png', drawRock());
+save('bush.png', drawBush());
+save('gem.png', drawGem());
+save('grass.png', drawGrass().scaled(2));
+
+// Kontrolní přehled všech politiků (jen pro oko, hra ho nepoužívá).
+const all = [...regular.map((id) => drawPolitician(id, 0, 2)), ...bosses.map((id) => drawPolitician(id, 0, 2))];
+const overview = new Canvas(all.reduce((w, s) => w + s.w * 2 + 12, 12), 96 * 2 + 24);
 overview.clear('#3f6b3a');
 let ox = 12;
 for (const s of all) {
-  overview.blit(s, ox, 12, 3);
-  ox += s.w * 3 + 12;
+  overview.blit(s, ox, 12, 2);
+  ox += s.w * 2 + 12;
 }
 fs.mkdirSync(path.join(root, 'design'), { recursive: true });
-fs.writeFileSync(path.join(root, 'design', 'prisery-prehled.png'), encodePNG(overview));
-save('grass.png', drawGrass().scaled(2));
+fs.writeFileSync(path.join(root, 'design', 'politici-prehled.png'), encodePNG(overview));
 console.log(`Grafika uložena do ${outDir}`);

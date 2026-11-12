@@ -8,7 +8,7 @@ export interface Stats {
   attackRange: number; // px
   attackArc: number; // rad
   armor: number; // odečte se z každého zásahu
-  aura: number; // poškození za sekundu příšerám poblíž
+  aura: number; // poškození za sekundu nepřátelům poblíž
   pickupRange: number; // px
   block: number; // šance 0–1 vykrýt zásah štítem
   tauntCooldown: number; // s, speciální schopnost

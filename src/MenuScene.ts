@@ -59,7 +59,7 @@ export function drawScores(scene: Phaser.Scene, x: number, y: number, runs: Run[
   if (runs.length === 0) made.push(label(scene, x, y + 110, 'Zatím nic.\nBěž něco přežít.', 36, '#9a9fa8'));
   runs.forEach((run, i) => {
     const mine = highlight !== null && run.date === highlight.date && run.time === highlight.time;
-    const text = `${i + 1}.   ${formatTime(run.time)}   ·   level ${run.level}   ·   ${run.kills} zabitých`;
+    const text = `${i + 1}.   ${formatTime(run.time)}   ·   level ${run.level}   ·   ${run.kills} odvolaných`;
     made.push(label(scene, x, y + i * 62, text, 36, mine ? '#ee8a3c' : '#e8e6e1'));
   });
   made.forEach((t) => t.setDepth(depth));

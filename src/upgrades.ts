@@ -18,7 +18,7 @@ export const UPGRADES: Upgrade[] = [
   {
     id: 'aura',
     name: 'Nepříjemná aura',
-    desc: 'Příšery poblíž ztrácí\n5 životů za vteřinu',
+    desc: 'Politici poblíž ztrácí\n5 životů za vteřinu',
     apply: (s) => (s.aura += 5),
   },
   { id: 'block', name: 'Kočičí reflex', desc: '+8 % šance vykrýt\nzásah štítem', apply: (s) => (s.block = Math.min(0.6, s.block + 0.08)) },
