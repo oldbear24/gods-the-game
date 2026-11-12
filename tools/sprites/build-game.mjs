@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { Canvas, encodePNG } from './px.mjs';
 import { drawTruplik } from './truplik.mjs';
 import { drawJiry, drawArrow } from './jiry.mjs';
-import { drawGem, drawGrass, drawBoomerang, drawShuriken, drawHammer } from './props.mjs';
+import { drawGem, drawGrass, drawBoomerang, drawShuriken, drawHammer, drawKatana, drawUrn } from './props.mjs';
 import { drawTree, drawRock, drawBush } from './monsters.mjs';
-import { drawPolitician, drawLeaflet, drawDonut, drawPixelShot } from './politicians.mjs';
+import { drawPolitician, drawLeaflet, drawDonut, drawPixelShot, drawLike, drawBell } from './politicians.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const outDir = path.join(root, 'public', 'assets');
@@ -47,6 +47,36 @@ save(
 );
 save('arrow.png', drawArrow());
 
+// Skiny: stejné snímky, jiná paleta a doplňky.
+save(
+  'truplik-kimono.png',
+  sheet([
+    drawTruplik('c', {}, 'kimono'),
+    drawTruplik('c', { bob: 1 }, 'kimono'),
+    drawTruplik('c', { bob: -1, liftL: 4 }, 'kimono'),
+    drawTruplik('c', { bob: -1, liftR: 4 }, 'kimono'),
+    drawTruplik('c', { bob: 1, swing: true }, 'kimono'),
+  ]),
+);
+save(
+  'jiry-samuraj.png',
+  sheet([
+    drawJiry({}, 'samuraj'),
+    drawJiry({ bob: 1 }, 'samuraj'),
+    drawJiry({ bob: -1, liftL: 4 }, 'samuraj'),
+    drawJiry({ bob: -1, liftR: 4 }, 'samuraj'),
+    drawJiry({ draw: true }, 'samuraj'),
+  ]),
+);
+{
+  const frames = [drawTruplik('c', {}, 'kimono'), drawJiry({}, 'samuraj'), drawJiry({ draw: true }, 'samuraj')];
+  const out = new Canvas(frames.length * 128 * 3, 128 * 3);
+  out.clear('#3f6b3a');
+  frames.forEach((f, i) => out.blit(f, i * 384, 0, 3));
+  fs.mkdirSync(path.join(root, 'design'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'design', 'skiny-prehled.png'), encodePNG(out));
+}
+
 // Kontrolní obrázek hratelných postav vedle sebe.
 {
   const frames = [drawTruplik('c'), drawJiry(), drawJiry({ bob: -1, liftL: 4 }), drawJiry({ draw: true })];
@@ -58,12 +88,16 @@ save('arrow.png', drawArrow());
 }
 
 // Politici: všichni na mřížce 72×72; bossové se ve hře jen víc zvětší (viz src/enemies.ts).
-const regular = ['fiala', 'rakusan', 'zeman', 'okamura'];
-const bosses = ['babis', 'turek', 'bartos'];
+const regular = ['fiala', 'rakusan', 'zeman', 'okamura', 'schillerova', 'konecna', 'stanjura', 'jurecka'];
+const bosses = ['babis', 'turek', 'bartos', 'pavel', 'pekarova', 'rajchl'];
 for (const id of [...regular, ...bosses]) save(`${id}.png`, sheet([drawPolitician(id, 0), drawPolitician(id, 1)]));
 save('leaflet.png', drawLeaflet());
 save('donut.png', drawDonut());
 save('pixel.png', drawPixelShot());
+save('like.png', drawLike());
+save('bell.png', drawBell());
+save('katana.png', drawKatana());
+save('urn.png', drawUrn());
 
 save('tree.png', drawTree());
 save('rock.png', drawRock());
@@ -84,7 +118,7 @@ save('hammer.png', drawHammer());
 save('grass.png', drawGrass().scaled(2));
 
 // Kontrolní přehled všech politiků (jen pro oko, hra ho nepoužívá).
-const all = [...regular, ...bosses].map((id) => drawPolitician(id, 0));
+const all = ['schillerova', 'konecna', 'stanjura', 'jurecka', 'pavel', 'pekarova', 'rajchl'].map((id) => drawPolitician(id, 0));
 const overview = new Canvas(all.reduce((w, s) => w + s.w * 3 + 12, 12), 72 * 3 + 24);
 overview.clear('#3f6b3a');
 let ox = 12;
@@ -93,5 +127,5 @@ for (const s of all) {
   ox += s.w * 3 + 12;
 }
 fs.mkdirSync(path.join(root, 'design'), { recursive: true });
-fs.writeFileSync(path.join(root, 'design', 'politici-prehled.png'), encodePNG(overview));
+fs.writeFileSync(path.join(root, 'design', 'politici-novi.png'), encodePNG(overview));
 console.log(`Grafika uložena do ${outDir}`);

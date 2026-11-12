@@ -70,3 +70,26 @@ export function drawHammer() {
   c.paint(S.rect(19, 5, 21, 9), STEEL, { outline: false });
   return c;
 }
+
+// Katana 30×8 špičkou doprava (vyvinutý bumerang, ve hře rotuje).
+export function drawKatana() {
+  const c = new Canvas(30, 8);
+  const S = shapes(30, 8);
+  c.paint(S.poly([[9, 2], [26, 2], [29, 4], [26, 5], [9, 5]]), STEEL);
+  c.paint(S.rect(1, 2, 7, 5), RED);
+  c.paint(S.rect(8, 0, 9, 7), { o: '#3a2608', s: '#a8741c', b: '#d9a32e', l: '#f6d76a' });
+  return c;
+}
+
+// Volební urna 20×20.
+export function drawUrn() {
+  const c = new Canvas(20, 20);
+  const S = shapes(20, 20);
+  c.paint(S.rect(2, 6, 17, 18), { o: '#3a3a3e', s: '#b8b8be', b: '#e2e2e6', l: '#ffffff' }, { hw: 1 });
+  c.paint(S.rect(1, 4, 18, 7), { o: '#3a3a3e', s: '#8a8a92', b: '#b8b8be', l: '#e2e2e6' });
+  c.line(6, 5, 13, 5, '#141418');
+  c.fill(S.rect(4, 11, 15, 12), '#2a4a9a');
+  c.fill(S.rect(4, 13, 15, 14), '#d42a2a');
+  c.paint(S.rect(8, 1, 12, 4), { o: '#6f6a66', s: '#c2bdb7', b: '#ece9e3', l: '#ffffff' }); // lístek
+  return c;
+}

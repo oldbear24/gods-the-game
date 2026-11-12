@@ -3,7 +3,7 @@ import { Canvas, shapes, hex } from './px.mjs';
 
 const SIZE = 128;
 
-const PAL = {
+const BASE = {
   skin: { o: '#5a2e26', s: '#cc8c70', b: '#eab292', l: '#f7d0b4' },
   hair: { o: '#56200e', s: '#9a3c12', b: '#c95c1c', l: '#ee8a3c' },
   shaved: '#8a3a16',
@@ -29,6 +29,19 @@ const PAL = {
   wood: { o: '#35200f', s: '#6c4222', b: '#96622f', l: '#bd8749' },
   rust: { o: '#3a120a', s: '#6e2415', b: '#963420', l: '#b94a2c' },
 };
+
+// Skiny přepisují jen část palety.
+const SKINS = {
+  kimono: {
+    hoodie: { o: '#14122a', s: '#2a2858', b: '#3d3d86', l: '#5a5cb0' },
+    collar: { o: '#6f6a66', s: '#c2bdb7', b: '#ece9e3', l: '#ffffff' },
+    tee: { o: '#3a0c0c', s: '#8e1f1f', b: '#c0322a', l: '#e06050' },
+    pants: { o: '#0c0c10', s: '#1c1c24', b: '#2a2a36', l: '#3e3e4c' },
+    shoe: { o: '#35200f', s: '#6c4222', b: '#96622f', l: '#bd8749' },
+    string: '#f6d76a',
+  },
+};
+let PAL = BASE;
 
 export const VARIANTS = {
   a: {
@@ -63,7 +76,8 @@ const sphere = (cx, cy, r) => (x, y) => {
 };
 
 // pose: { bob: posun těla nahoru/dolů, liftL/liftR: zvednutí nohy, swing: palcát v úderu }
-export function drawTruplik(key, pose = {}) {
+export function drawTruplik(key, pose = {}, skin = null) {
+  PAL = skin ? { ...BASE, ...SKINS[skin] } : BASE;
   const P = { ...VARIANTS[key] };
   P.hy += pose.bob ?? 0;
   const c = new Canvas(SIZE, SIZE);

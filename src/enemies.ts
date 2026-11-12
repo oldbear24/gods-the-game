@@ -18,10 +18,12 @@ export interface EnemyDef {
   weight: number; // jak často oproti ostatním
   quotes: string[]; // co pokřikuje během boje
   defeat: string; // co řekne, když je odvolán
+  female?: boolean; // kvůli tvaru „byla odvolána“
   ranged?: { range: number; cooldown: number; speed: number; damage: number; sprite: string };
   boss?: {
-    // spread = vějíř střel na hráče, radial = střely do všech stran, charge = rozjezd v přímce
-    ability: 'spread' | 'radial' | 'charge';
+    // spread = vějíř střel na hráče, radial = střely do všech stran, charge = rozjezd v přímce,
+    // summon = přivolá si na pomoc běžné politiky
+    ability: 'spread' | 'radial' | 'charge' | 'summon';
     cooldown: number;
     shot?: { sprite: string; speed: number; damage: number };
   };
@@ -54,9 +56,31 @@ export const ENEMIES: EnemyDef[] = [
     quotes: ['„Ne diktátu Bruselu!“', '„Referendum!“', '„Za všechno může vláda!“', '„Vezměte si leták!“'],
     defeat: '„To je cenzura!“',
   },
+  // Rychlá, s cedulí.
+  { id: 'konecna', name: 'Kateřina Konečná', sheet: 'konecna', female: true, ...small, speed: 200, hp: 12, damage: 6, xp: 1, from: 50, weight: 2,
+    quotes: ['„Stačilo!“', '„A dost!“', '„Tohle už stačilo!“', '„Lidi toho mají dost!“'],
+    defeat: '„Tak tohle fakt stačilo.“',
+  },
+  // Středně tuhý, škrtá nůžkami.
+  { id: 'stanjura', name: 'Zbyněk Stanjura', sheet: 'stanjura', ...small, speed: 110, hp: 32, damage: 9, xp: 2, from: 95, weight: 2,
+    quotes: ['„Škrtám!“', '„Na to nejsou peníze.“', '„Konsolidační balíček!“', '„Rozpočet je v pořádku.“'],
+    defeat: '„Vyškrtli mě.“',
+  },
+  // Pomalý a hodně odolný, s vidlemi.
+  { id: 'jurecka', name: 'Marian Jurečka', sheet: 'jurecka', ...small, speed: 75, hp: 70, damage: 11, xp: 3, from: 140, weight: 1.5,
+    quotes: ['„Jdu rovnou z pole!“', '„Sklizeň bude!“', '„Důchody vyřešíme později.“', '„Kde mám traktor?“'],
+    defeat: '„Jdu zpátky na statek.“',
+  },
+  // Střelkyně: fotí selfie a hází lajky.
+  {
+    id: 'schillerova', name: 'Alena Schillerová', sheet: 'schillerova', female: true, ...small, speed: 90, hp: 22, damage: 6, xp: 2, from: 150, weight: 1.2,
+    ranged: { range: 480, cooldown: 2.2, speed: 300, damage: 9, sprite: 'like' },
+    quotes: ['„Počkej, ještě selfie!“', '„Dej mi lajk!“', '„To je do storíčka.“', '„Rozpočet mám na Instagramu.“'],
+    defeat: '„Tohle si nepostnu.“',
+  },
 ];
 
-// Bossové se střídají v tomhle pořadí, každé kolo silnější.
+// Pořadí bossů se v každém pokusu losuje: tři přijdou postupně, zbylí tři tvoří finální koalici.
 export const BOSSES: EnemyDef[] = [
   {
     id: 'babis', name: 'Andrej Babiš', sheet: 'babis', ...big, speed: 75, hp: 700, damage: 20, xp: 3, from: 0, weight: 0,
@@ -78,6 +102,28 @@ export const BOSSES: EnemyDef[] = [
     defeat: '„Spadl mi systém.“',
     boss: {
       ability: 'radial', cooldown: 3.2, shot: { sprite: 'pixel', speed: 300, damage: 10 },
+    },
+  },
+  {
+    id: 'pavel', name: 'Petr Pavel', sheet: 'pavel', ...big, speed: 80, hp: 850, damage: 22, xp: 3, from: 0, weight: 0,
+    quotes: ['„Řád a klid!“', '„Pozor!“', '„Vraťme sem řád a klid.“', '„To je rozkaz.“'],
+    defeat: '„Rozchod.“',
+    boss: { ability: 'summon', cooldown: 6 },
+  },
+  {
+    id: 'pekarova', name: 'Markéta Pekarová Adamová', sheet: 'pekarova', female: true, ...big, speed: 75, hp: 800, damage: 20, xp: 3, from: 0, weight: 0,
+    quotes: ['„Klid v sále!“', '„Uděluji vám napomenutí!“', '„Přerušuji schůzi!“', '„Vezměte si svetr.“'],
+    defeat: '„Schůze je ukončena.“',
+    boss: {
+      ability: 'radial', cooldown: 3, shot: { sprite: 'bell', speed: 310, damage: 10 },
+    },
+  },
+  {
+    id: 'rajchl', name: 'Jindřich Rajchl', sheet: 'rajchl', ...big, speed: 85, hp: 750, damage: 20, xp: 3, from: 0, weight: 0,
+    quotes: ['„Demisi!“', '„Všichni na náměstí!“', '„Podám žalobu!“', '„Mám na to právní rozbor!“'],
+    defeat: '„Sejdeme se u soudu.“',
+    boss: {
+      ability: 'spread', cooldown: 2.4, shot: { sprite: 'leaflet', speed: 370, damage: 11 },
     },
   },
 ];

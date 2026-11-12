@@ -12,18 +12,26 @@ const SUITS = {
   black: { o: '#08080a', s: '#17171b', b: '#26262c', l: '#3a3a44' },
   grey: { o: '#1c1e22', s: '#474b54', b: '#646a76', l: '#8a909c' },
   green: { o: '#0c2412', s: '#1c5a2a', b: '#2a8040', l: '#4cae62' },
+  red: { o: '#3a0c0c', s: '#8e1f1f', b: '#c0322a', l: '#e06050' },
+  purple: { o: '#240c30', s: '#5a2070', b: '#8030a0', l: '#a858c8' },
+  olive: { o: '#161a0c', s: '#3a4420', b: '#566430', l: '#788a48' },
+  brown: { o: '#20140a', s: '#4e3420', b: '#6e4c30', l: '#927048' },
+  sky: { o: '#14283a', s: '#3a6e96', b: '#5a96c0', l: '#8cc0e2' },
 };
 const HAIRS = {
   grey: { o: '#3a3a3e', s: '#7c7c82', b: '#a4a4aa', l: '#c8c8ce' },
   white: { o: '#6a6a70', s: '#b8b8be', b: '#e2e2e6', l: '#ffffff' },
   brown: { o: '#24140a', s: '#4a2c16', b: '#6a4222', l: '#8c5c34' },
   black: { o: '#050506', s: '#141418', b: '#26262c', l: '#40404a' },
+  blonde: { o: '#5a4010', s: '#b08a30', b: '#dcb850', l: '#f6e08a' },
 };
 const SHIRT = { o: '#6f6a66', s: '#c2bdb7', b: '#ece9e3', l: '#ffffff' };
 const WOOD = { o: '#35200f', s: '#6c4222', b: '#96622f', l: '#bd8749' };
 const CAP = { o: '#4a0c0c', s: '#a01c1c', b: '#d42a2a', l: '#f25a4a' };
 const DONUT = { o: '#3a200c', s: '#a8662a', b: '#d08a3c', l: '#eab060' };
-const MOUTH = '#78382e';
+const MOUTH_BASE = '#78382e';
+const GOLD = { o: '#3a2608', s: '#a8741c', b: '#d9a32e', l: '#f6d76a' };
+const STEEL = '#c8ccd4';
 
 // rx, ry = rozměr hlavy; jaw = hranatost (2 kulatá, 3 hranatá); ears, nose = velikost;
 // brow = [tloušťka, sklon k nosu]; lines = vrásky kolem úst; bags = váčky pod očima.
@@ -63,6 +71,41 @@ export const POLITICIANS = {
     hair: 'dreads', hairColor: 'brown', beard: 'stubble',
     suit: 'black', hoodie: true, prop: 'accordion',
   },
+  schillerova: {
+    rx: 13, ry: 15, jaw: 2.2, ears: 0.8, nose: 2, brow: [1, 0], mouth: 'smile', mouthW: 5,
+    hair: 'bob', hairColor: 'blonde', glasses: true, lips: '#c0485a',
+    suit: 'sky', prop: 'phone',
+  },
+  konecna: {
+    rx: 14, ry: 15, jaw: 2.2, ears: 0.8, nose: 2, brow: [2, 2], mouth: 'flat', mouthW: 5,
+    hair: 'long', hairColor: 'brown', lips: '#b03a48',
+    suit: 'red', prop: 'sign',
+  },
+  stanjura: {
+    rx: 16, ry: 15, jaw: 2.3, ears: 1, nose: 2, brow: [1, 0], mouth: 'flat', mouthW: 4,
+    hair: 'side', hairColor: 'grey', glasses: true, jowls: true,
+    suit: 'charcoal', tie: '#2a4a9a', prop: 'scissors', wide: 2,
+  },
+  jurecka: {
+    rx: 16, ry: 15, jaw: 2.4, ears: 1.1, nose: 2, brow: [2, 0], mouth: 'smile', mouthW: 5,
+    hair: 'side', hairColor: 'brown', skin: SKIN_RUDDY,
+    suit: 'brown', tie: '#2a6a3a', prop: 'pitchfork', wide: 3,
+  },
+  pavel: {
+    rx: 14, ry: 16, jaw: 2.8, ears: 1, nose: 2, brow: [2, 1], mouth: 'flat', mouthW: 4,
+    hair: 'slick', hairColor: 'white', beard: 'full',
+    suit: 'olive', tie: '#2a2e1c', medals: true, wide: 2,
+  },
+  pekarova: {
+    rx: 13, ry: 15, jaw: 2.2, ears: 0.8, nose: 2, brow: [1, 1], mouth: 'smile', mouthW: 5,
+    hair: 'long', hairColor: 'brown', lips: '#b03a48',
+    suit: 'purple', prop: 'bell',
+  },
+  rajchl: {
+    rx: 14, ry: 16, jaw: 2.7, ears: 1, nose: 2, brow: [3, 2], mouth: 'grin', mouthW: 5,
+    hair: 'slick', hairColor: 'black', beard: 'stubble',
+    suit: 'navy', prop: 'megaphone', wide: 1,
+  },
 };
 
 export function drawPolitician(id, frame) {
@@ -73,6 +116,7 @@ export function drawPolitician(id, frame) {
   const suit = SUITS[f.suit];
   const hair = HAIRS[f.hairColor];
   const skin = f.skin ?? SKIN;
+  const MOUTH = f.lips ?? MOUTH_BASE;
   const bob = frame === 1 ? 1 : 0;
   const hx = 36;
   const hy = 23 + bob;
@@ -89,6 +133,19 @@ export function drawPolitician(id, frame) {
   if (f.prop === 'cane') {
     c.paint(S.capsule([[handR[0] + 2, 50], [handR[0] + 2, 67]], 1), WOOD);
     c.paint(S.capsule([[handR[0] + 2, 50], [handR[0] - 2, 50]], 1), WOOD);
+  }
+  if (f.prop === 'pitchfork') {
+    const x = handR[0] + 3;
+    c.paint(S.capsule([[x, 30], [x, 67]], 1), WOOD);
+    c.line(x - 3, 29, x + 3, 29, STEEL);
+    for (const dx of [-3, 0, 3]) c.line(x + dx, 22, x + dx, 29, STEEL);
+  }
+  if (f.prop === 'sign') {
+    const x = handR[0] + 2;
+    c.paint(S.capsule([[x, 34], [x, 56]], 1), WOOD);
+    c.paint(S.rect(x - 7, 24, x + 7, 34), SUITS.red);
+    c.line(x - 4, 28, x + 4, 28, '#ffffff');
+    c.line(x - 4, 31, x + 2, 31, '#ffffff');
   }
   for (const side of [-1, 1]) {
     const x0 = side < 0 ? 29 : 38;
@@ -108,6 +165,13 @@ export function drawPolitician(id, frame) {
     if (f.tie) c.paint(S.poly([[35, top + 1], [37, top + 1], [38, top + 10], [36, top + 13], [34, top + 10]]), { o: '#200808', s: f.tie, b: f.tie, l: f.tie });
     c.line(29, top + 1, 35, top + 13, suit.o);
     c.line(43, top + 1, 37, top + 13, suit.o);
+  }
+  if (f.medals) {
+    for (const [x, col] of [[39, '#f6d76a'], [41, '#d42a2a'], [43, '#f6d76a']]) {
+      c.px(x, top + 6, col);
+      c.px(x, top + 7, col);
+    }
+    c.line(39, top + 5, 43, top + 5, '#3d4f86');
   }
   for (const side of [-1, 1]) {
     const hand = side > 0 ? handR : [20 - wide, 54 + bob];
@@ -130,6 +194,19 @@ export function drawPolitician(id, frame) {
     c.paint(S.circle(px + 2, py - 4, 6).sub(S.circle(px + 2, py - 4, 3.8)), SUITS.black);
     c.line(px - 3, py - 4, px + 7, py - 4, SUITS.black.l);
     c.line(px + 2, py - 4, px + 2, py + 1, SUITS.black.l);
+  } else if (f.prop === 'phone') {
+    c.paint(S.rect(px, py - 10, px + 5, py - 1), SUITS.black);
+    c.fill(S.rect(px + 1, py - 9, px + 4, py - 3), '#8cd0ff');
+  } else if (f.prop === 'scissors') {
+    c.line(px - 1, py - 12, px + 4, py - 2, STEEL);
+    c.line(px + 4, py - 12, px - 1, py - 2, STEEL);
+    c.paint(S.circle(px - 1, py, 1.6), SUITS.red, { outline: false });
+    c.paint(S.circle(px + 5, py, 1.6), SUITS.red, { outline: false });
+  } else if (f.prop === 'bell') {
+    c.paint(S.poly([[px - 1, py - 2], [px + 8, py - 2], [px + 6, py - 9], [px + 1, py - 9]]), GOLD);
+    c.paint(S.rect(px + 3, py - 12, px + 4, py - 10), WOOD, { outline: false });
+    c.px(px + 3, py - 1, GOLD.o);
+    c.px(px + 4, py - 1, GOLD.o);
   } else if (f.prop === 'accordion') {
     c.paint(S.rect(px - 4, py - 9, px + 6, py + 1), CAP);
     for (let x = px - 2; x <= px + 4; x += 2) c.line(x, py - 8, x, py, '#ece9e3');
@@ -244,6 +321,11 @@ export function drawPolitician(id, frame) {
     mask = dome.filter((x, y) => V(y) < -0.7 + 0.6 * Math.abs(U(x)) ** 3).or(S.ellipse(hx, hy - ry, rx * 0.8, 3.5));
   if (f.hair === 'thin') mask = dome.filter((x, y) => Math.abs(U(x)) > 0.74 && V(y) < 0.05 && V(y) > -0.72);
   if (f.hair === 'cap') mask = dome.filter((x, y) => Math.abs(U(x)) > 0.8 && V(y) < 0.1 && V(y) > -0.5);
+  if (f.hair === 'bob' || f.hair === 'long') {
+    mask = dome.filter((x, y) => V(y) < -0.52 + 0.5 * Math.abs(U(x)) ** 3 || (Math.abs(U(x)) > 0.8 && V(y) < 0.72));
+    if (f.hair === 'long')
+      for (const side of [-1, 1]) mask = mask.or(S.capsule([[hx + side * rx, hy - 4], [hx + side * (rx + 1), 45 + bob]], 2.6));
+  }
   if (f.hair === 'dreads') {
     mask = dome.filter((x, y) => V(y) < -0.5 + 0.5 * Math.abs(U(x)) ** 3);
     for (const side of [-1, 1])
@@ -296,5 +378,23 @@ export function drawDonut() {
 export function drawPixelShot() {
   const c = new Canvas(12, 12);
   c.paint(shapes(12, 12).rect(3, 3, 8, 8), { o: '#1c0c3a', s: '#5a2ab0', b: '#8a4af0', l: '#d0b0ff' });
+  return c;
+}
+
+// Lajk (srdíčko) a zvonek: střely nových politiků.
+export function drawLike() {
+  const c = new Canvas(12, 12);
+  const S = shapes(12, 12);
+  const heart = S.circle(4, 4, 2.6).or(S.circle(8, 4, 2.6)).or(S.poly([[1, 5], [11, 5], [6, 11]]));
+  c.paint(heart, { o: '#4a0c20', s: '#c02a58', b: '#f0508a', l: '#ffb0cc' });
+  return c;
+}
+
+export function drawBell() {
+  const c = new Canvas(12, 12);
+  const S = shapes(12, 12);
+  c.paint(S.poly([[1, 9], [11, 9], [9, 2], [3, 2]]), GOLD);
+  c.px(5, 10, GOLD.o);
+  c.px(6, 10, GOLD.o);
   return c;
 }

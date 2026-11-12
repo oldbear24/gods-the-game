@@ -2,7 +2,7 @@
 import { Canvas, shapes, hex } from './px.mjs';
 
 const SIZE = 128;
-const PAL = {
+const BASE = {
   skin: { o: '#5a2e26', s: '#cc8c70', b: '#eab292', l: '#f7d0b4' },
   hair: { o: '#120a06', s: '#281810', b: '#3c281c', l: '#5a4030' },
   shirt: { o: '#2a3a30', s: '#6a8a74', b: '#8fb09a', l: '#b4d0bc' },
@@ -16,8 +16,19 @@ const PAL = {
   string: '#e8e2d4',
 };
 
-// pose: { bob, liftL, liftR, draw: natažený luk }
-export function drawJiry(pose = {}) {
+const SKINS = {
+  samuraj: {
+    shirt: { o: '#2a0808', s: '#7a1818', b: '#a82a22', l: '#d85040' },
+    pants: { o: '#0c0c10', s: '#1c1c24', b: '#2a2a36', l: '#3e3e4c' },
+    strap: '#d9a32e',
+    helmet: true,
+  },
+};
+let PAL = BASE;
+
+// pose: { bob, liftL, liftR, draw: natažený luk }; skin: null nebo 'samuraj'
+export function drawJiry(pose = {}, skin = null) {
+  PAL = skin ? { ...BASE, ...SKINS[skin] } : BASE;
   const c = new Canvas(SIZE, SIZE);
   const S = shapes(SIZE, SIZE);
   const bob = pose.bob ?? 0;
@@ -141,6 +152,17 @@ export function drawJiry(pose = {}) {
   hair.each((x, y) => {
     if (hair.get(x + 2, y) && hair.get(x - 2, y) && hair.get(x, y - 2) && (x + y * 3) % 6 === 0) c.px(x, y, PAL.hair.l);
   });
+
+  if (PAL.helmet) {
+    // Samurajská přilba kabuto se zlatým půlměsícem
+    const iron = { o: '#08080c', s: '#20222a', b: '#363a46', l: '#5a6070' };
+    const gold = { o: '#3a2608', s: '#a8741c', b: '#d9a32e', l: '#f6d76a' };
+    c.paint(S.capsule([[hx - 12, hy - ry - 12], [hx - 7, hy - ry - 3], [hx, hy - ry], [hx + 7, hy - ry - 3], [hx + 12, hy - ry - 12]], 1.6), gold);
+    c.paint(dome.filter((x, y) => V(y) < -0.42), iron, { hw: 2, sw: 2 });
+    c.paint(S.ellipse(hx, hy - Math.round(ry * 0.42), rx + 6, 2.6), iron);
+    c.fill(S.circle(hx, hy - Math.round(ry * 0.7), 2.2), gold.b);
+    return c;
+  }
 
   // Čelenka hačimaki s červeným kolečkem
   const band = head.filter((x, y) => V(y) > -0.62 && V(y) < -0.42);

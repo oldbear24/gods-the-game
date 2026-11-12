@@ -14,12 +14,19 @@ export interface Stats {
   tauntCooldown: number; // s, nabíjení speciální schopnosti
 }
 
+export interface Skin {
+  name: string;
+  sheet: string; // sprite sheet se stejným pořadím snímků jako základní
+  cost: number; // zlaťáky; 0 = základní vzhled
+}
+
 export interface CharacterDef {
   id: string;
   name: string;
   title: string;
   blurb: string; // krátký popis do menu
   sheet: string;
+  skins: Skin[]; // první je základní vzhled
   // Snímky ve sprite sheetu (viz tools/sprites/build-game.mjs)
   frames: { idle: number[]; walk: number[]; attack: number };
   stats: Stats;
@@ -40,6 +47,10 @@ export const CHARACTERS: Record<string, CharacterDef> = {
     title: 'tank, nepříjemný zrzek',
     blurb: 'Meč a štít. Hodně vydrží, seká zblízka.\nMezerník: Provokace.',
     sheet: 'truplik',
+    skins: [
+      { name: 'Mikina', sheet: 'truplik', cost: 0 },
+      { name: 'Kimono', sheet: 'truplik-kimono', cost: 300 },
+    ],
     frames: { idle: [0, 1], walk: [2, 0, 3, 0], attack: 4 },
     stats: {
       maxHp: 160,
@@ -85,6 +96,10 @@ export const CHARACTERS: Record<string, CharacterDef> = {
     title: 'malý lučištník, milovník Japonska',
     blurb: 'Japonský luk. Rychlý, střílí z dálky, málo vydrží.\nMezerník: Hod Truplem.',
     sheet: 'jiry',
+    skins: [
+      { name: 'Tričko', sheet: 'jiry', cost: 0 },
+      { name: 'Samuraj', sheet: 'jiry-samuraj', cost: 300 },
+    ],
     frames: { idle: [0, 1], walk: [2, 0, 3, 0], attack: 4 },
     stats: {
       maxHp: 110,
