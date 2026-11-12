@@ -31,3 +31,42 @@ export function drawGrass() {
   }
   return c;
 }
+
+// ---------- zbraně navíc ----------
+
+const WOOD = { o: '#3a2210', s: '#8a5a2a', b: '#c98a45', l: '#f0c07a' };
+const STEEL = { o: '#1c222c', s: '#6c7684', b: '#aeb8c6', l: '#f0f4fa' };
+const RED = { o: '#3a0c0c', s: '#8e1f1f', b: '#d0392e', l: '#ff8a70' };
+
+// Bumerang 20×20, střed otáčení uprostřed.
+export function drawBoomerang() {
+  const c = new Canvas(20, 20);
+  const S = shapes(20, 20);
+  c.paint(S.capsule([[3, 4], [10, 14], [17, 4]], 2.4), WOOD);
+  c.px(3, 4, '#e0483a');
+  c.px(17, 4, '#e0483a');
+  return c;
+}
+
+// Shuriken 16×16.
+export function drawShuriken() {
+  const c = new Canvas(16, 16);
+  const S = shapes(16, 16);
+  c.paint(S.poly([[8, 0], [10, 6], [16, 8], [10, 10], [8, 16], [6, 10], [0, 8], [6, 6]]), STEEL);
+  c.px(8, 8, '#1c222c');
+  c.px(7, 8, '#1c222c');
+  c.px(8, 7, '#1c222c');
+  c.px(7, 7, '#1c222c');
+  return c;
+}
+
+// Banhammer 24×30, hlava nahoře.
+export function drawHammer() {
+  const c = new Canvas(24, 30);
+  const S = shapes(24, 30);
+  c.paint(S.rect(10, 10, 13, 28), WOOD);
+  c.paint(S.rect(2, 2, 21, 12), RED, { hw: 2 });
+  c.paint(S.rect(2, 5, 4, 9), STEEL, { outline: false });
+  c.paint(S.rect(19, 5, 21, 9), STEEL, { outline: false });
+  return c;
+}

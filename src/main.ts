@@ -3,6 +3,7 @@ import '@fontsource/pixelify-sans/700.css';
 import { BootScene } from './BootScene';
 import { MenuScene } from './MenuScene';
 import { GameScene } from './GameScene';
+import { ShopScene } from './ShopScene';
 import { GAME_W, GAME_H } from './ui';
 
 // Písmo se musí načíst dřív, než Phaser nakreslí první text (včetně českých znaků).
@@ -20,6 +21,6 @@ document.fonts
       pixelArt: true,
       scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
       physics: { default: 'arcade' },
-      scene: [BootScene, MenuScene, GameScene],
+      scene: [BootScene, MenuScene, ShopScene, GameScene],
     });
   });

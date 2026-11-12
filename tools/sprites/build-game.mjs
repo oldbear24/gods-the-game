@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { Canvas, encodePNG } from './px.mjs';
 import { drawTruplik } from './truplik.mjs';
 import { drawJiry, drawArrow } from './jiry.mjs';
-import { drawGem, drawGrass } from './props.mjs';
+import { drawGem, drawGrass, drawBoomerang, drawShuriken, drawHammer } from './props.mjs';
 import { drawTree, drawRock, drawBush } from './monsters.mjs';
 import { drawPolitician, drawLeaflet, drawDonut, drawPixelShot } from './politicians.mjs';
 
@@ -69,6 +69,18 @@ save('tree.png', drawTree());
 save('rock.png', drawRock());
 save('bush.png', drawBush());
 save('gem.png', drawGem());
+save('boomerang.png', drawBoomerang());
+save('shuriken.png', drawShuriken());
+save('hammer.png', drawHammer());
+
+// Kontrolní obrázek zbraní navíc.
+{
+  const items = [drawBoomerang(), drawShuriken(), drawHammer()];
+  const out = new Canvas(3 * 30 * 6, 30 * 6);
+  out.clear('#3f6b3a');
+  items.forEach((f, i) => out.blit(f, i * 180 + 18, 12, 6));
+  fs.writeFileSync(path.join(root, 'design', 'zbrane-prehled.png'), encodePNG(out));
+}
 save('grass.png', drawGrass().scaled(2));
 
 // Kontrolní přehled všech politiků (jen pro oko, hra ho nepoužívá).

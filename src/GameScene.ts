@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import { CHARACTERS, THROWN_QUOTES, selectedCharacter, type CharacterDef, type Stats } from './characters';
 import { ENEMIES, BOSSES, BOSS_INTERVAL, type EnemyDef } from './enemies';
-import { UPGRADES, type Upgrade } from './upgrades';
+import { UPGRADES } from './upgrades';
+import { WEAPONS } from './weapons';
+import { addGold, applyShop, goldMultiplier } from './meta';
 import { audio } from './audio';
 import { addScore, type Run } from './scores';
 import { drawScores } from './MenuScene';
@@ -16,6 +18,16 @@ const TAUNT_DURATION = 4;
 const THROW_RADIUS = 300;
 const DECOR_CELL = 480;
 const REGEN_PER_SECOND = 1; // tank se pomalu léčí sám
+const FINALE_HP = 2.5; // násobek životů bossů ve finále
+const ORBIT_HIT_EVERY = 0.45; // s, jak často může shuriken zranit stejného nepřítele
+
+interface Boomerang {
+  img: Phaser.GameObjects.Image;
+  angle: number;
+  t: number;
+  back: boolean;
+  hit: Set<Phaser.Physics.Arcade.Sprite>;
+}
 
 type Sprite = Phaser.Physics.Arcade.Sprite;
 type Key = Phaser.Input.Keyboard.Key;
@@ -32,7 +44,14 @@ export class GameScene extends Phaser.Scene {
   private ground!: Phaser.GameObjects.TileSprite;
   private auraRing!: Phaser.GameObjects.Arc;
   private decor = new Map<string, Phaser.GameObjects.Image | null>();
-  private boss: Sprite | null = null;
+  private weapons: Record<string, number> = {};
+  private boomerangs: Boomerang[] = [];
+  private shurikens: Phaser.GameObjects.Image[] = [];
+  private orbitAngle = 0;
+  private boomerangTimer = 0;
+  private hammerTimer = 0;
+  private finale = false;
+  private bossKills = 0;
   private hudBars!: Phaser.GameObjects.Graphics;
   private hudHp!: Phaser.GameObjects.Text;
   private hudLevel!: Phaser.GameObjects.Text;
@@ -89,6 +108,7 @@ export class GameScene extends Phaser.Scene {
 
     this.def = CHARACTERS[this.charId];
     this.stats = { ...this.def.stats };
+    applyShop(this.stats); // trvalá vylepšení z obchodu
     this.hp = this.stats.maxHp;
     this.xp = 0;
     this.level = 1;
@@ -104,7 +124,14 @@ export class GameScene extends Phaser.Scene {
     this.tauntUntil = 0;
     this.nextBossAt = Number(params.get('boss') ?? BOSS_INTERVAL);
     this.bossCount = Number(params.get('skip') ?? 0);
-    this.boss = null;
+    this.weapons = {};
+    this.boomerangs = [];
+    this.shurikens = [];
+    this.orbitAngle = 0;
+    this.boomerangTimer = 0;
+    this.hammerTimer = 0;
+    this.finale = false;
+    this.bossKills = 0;
     this.paused = false;
     this.choosing = false;
     this.dead = false;
@@ -183,6 +210,7 @@ export class GameScene extends Phaser.Scene {
     this.spawnEnemies(dt);
     this.autoAttack(dt);
     this.tickAura(dt);
+    this.updateWeapons(dt);
     this.collectGems(dt);
     this.updateDecor();
     this.updateHud();
@@ -360,6 +388,131 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // ---------- zbraně navíc ----------
+
+  // Zraní všechny nepřátele v kruhu; `seen` hlídá, aby jedna střela netrefila téhož dvakrát.
+  private hitCircle(x: number, y: number, r: number, damage: number, knockback: number, stun: number, seen?: Set<Sprite>) {
+    for (const e of [...this.enemies.getChildren()] as Sprite[]) {
+      if (!e.active || seen?.has(e)) continue;
+      const reach = r + (e.getData('def') as EnemyDef).body[0] * e.scaleX;
+      if (Phaser.Math.Distance.Between(x, y, e.x, e.y - e.displayHeight * 0.3) > reach) continue;
+      seen?.add(e);
+      this.damageEnemy(e, damage, knockback, stun, true);
+    }
+  }
+
+  private updateWeapons(dt: number) {
+    const p = this.player;
+    const cy = p.y - 50;
+    const at = (id: string) => (this.weapons[id] ?? 0) - 1; // index úrovně, -1 = zbraň nemá
+    const [boom, shur, ham] = WEAPONS;
+
+    // Bumerang: letí k nejbližšímu nepříteli a vrací se; cestou tam i zpátky zraní každého jednou.
+    const bl = at('boomerang');
+    if (bl >= 0) {
+      this.boomerangTimer -= dt;
+      if (this.boomerangTimer <= 0) {
+        let target: Sprite | null = null;
+        let best = 600;
+        for (const e of this.enemies.getChildren() as Sprite[]) {
+          const dist = Phaser.Math.Distance.Between(p.x, p.y, e.x, e.y);
+          if (dist < best) {
+            best = dist;
+            target = e;
+          }
+        }
+        if (target) {
+          this.boomerangTimer = boom.cooldown[bl];
+          const base = Phaser.Math.Angle.Between(p.x, cy, target.x, target.y - 40);
+          const n = boom.count[bl];
+          for (let i = 0; i < n; i++) {
+            const img = this.add.image(p.x, cy, 'boomerang').setScale(3).setDepth(UI_DEPTH - 20);
+            this.boomerangs.push({ img, angle: base + (i - (n - 1) / 2) * 0.45, t: 0, back: false, hit: new Set() });
+          }
+          audio.play('swing');
+        }
+      }
+    }
+    for (const b of [...this.boomerangs]) {
+      b.t += dt;
+      const k = b.t / 0.9;
+      if (k >= 1) {
+        b.img.destroy();
+        this.boomerangs.splice(this.boomerangs.indexOf(b), 1);
+        continue;
+      }
+      if (!b.back && k >= 0.5) {
+        b.back = true;
+        b.hit.clear();
+      }
+      const out = Math.sin(Math.PI * k) * boom.size[Math.max(0, bl)];
+      const x = p.x + Math.cos(b.angle) * out;
+      const y = cy + Math.sin(b.angle) * out;
+      b.img.setPosition(x, y).setRotation(b.img.rotation + dt * 18);
+      this.hitCircle(x, y, 34, this.stats.damage * boom.damage[Math.max(0, bl)], 120, 0.1, b.hit);
+    }
+
+    // Shurikeny: krouží kolem hráče.
+    const sl = at('shuriken');
+    if (sl >= 0) {
+      while (this.shurikens.length < shur.count[sl]) this.shurikens.push(this.add.image(p.x, cy, 'shuriken').setScale(3));
+      this.orbitAngle += dt * 3.2;
+      const dmg = this.stats.damage * shur.damage[sl];
+      this.shurikens.forEach((img, i) => {
+        const a = this.orbitAngle + (i / this.shurikens.length) * Math.PI * 2;
+        const x = p.x + Math.cos(a) * shur.size[sl];
+        const y = cy + Math.sin(a) * shur.size[sl] * 0.8;
+        img.setPosition(x, y).setRotation(img.rotation + dt * 14).setDepth(y + 50);
+        for (const e of [...this.enemies.getChildren()] as Sprite[]) {
+          if (!e.active || this.elapsed < ((e.getData('orbitAt') as number | undefined) ?? 0)) continue;
+          const reach = 30 + (e.getData('def') as EnemyDef).body[0] * e.scaleX;
+          if (Phaser.Math.Distance.Between(x, y, e.x, e.y - e.displayHeight * 0.3) > reach) continue;
+          e.setData('orbitAt', this.elapsed + ORBIT_HIT_EVERY);
+          this.damageEnemy(e, dmg, 90, 0.08, true);
+        }
+      });
+    }
+
+    // Banhammer: spadne na náhodného nepřítele poblíž a zraní vše kolem.
+    const hl = at('hammer');
+    if (hl >= 0) {
+      this.hammerTimer -= dt;
+      if (this.hammerTimer <= 0) {
+        const near = (this.enemies.getChildren() as Sprite[]).filter(
+          (e) => Phaser.Math.Distance.Between(p.x, p.y, e.x, e.y) < 650,
+        );
+        if (near.length === 0) this.hammerTimer = 0.3;
+        else {
+          this.hammerTimer = ham.cooldown[hl];
+          const radius = ham.size[hl];
+          const dmg = this.stats.damage * ham.damage[hl];
+          for (let i = 0; i < ham.count[hl]; i++) {
+            const target = Phaser.Utils.Array.GetRandom(near);
+            const x = target.x;
+            const y = target.y - 20;
+            const img = this.add.image(x, y - 520, 'hammer').setScale(4).setOrigin(0.5, 0.2).setDepth(UI_DEPTH - 25);
+            this.tweens.add({
+              targets: img,
+              y,
+              duration: 260,
+              delay: i * 140,
+              ease: 'Quad.easeIn',
+              onComplete: () => {
+                audio.play('taunt');
+                this.cameras.main.shake(110, 0.005);
+                const ring = this.add.circle(x, y, 40, 0xd0392e, 0.3).setStrokeStyle(8, 0xd0392e, 0.9).setDepth(y - 500);
+                this.tweens.add({ targets: ring, scale: radius / 40, alpha: 0, duration: 320, onComplete: () => ring.destroy() });
+                this.float(x, y - 120, 'BAN!', '#ff8a70', 40, 800);
+                this.hitCircle(x, y, radius, dmg, 260, 0.6);
+                this.tweens.add({ targets: img, alpha: 0, delay: 250, duration: 250, onComplete: () => img.destroy() });
+              },
+            });
+          }
+        }
+      }
+    }
+  }
+
   // Zásah hráče. Střely ignorují krátkou nezranitelnost po doteku nepřítele.
   private takeDamage(amount: number, ignoreCooldown = false) {
     if (this.dead) return;
@@ -402,14 +555,26 @@ export class GameScene extends Phaser.Scene {
     };
 
     if (t >= this.nextBossAt) {
-      this.nextBossAt += BOSS_INTERVAL;
       this.bossCount++;
-      const [x, y] = ringPoint();
-      // Bossové se střídají; každé další kolo mají víc životů.
-      const def = BOSSES[(this.bossCount - 1) % BOSSES.length];
-      this.boss = this.spawn(def, x, y, 1 + (this.bossCount - 1) * 0.6);
-      this.boss.setPushable(false);
-      this.banner(`${def.name.toUpperCase()} PŘICHÁZÍ!\n${Phaser.Utils.Array.GetRandom(def.quotes)}`, '#e0483a');
+      if (this.bossCount > BOSSES.length) {
+        // Finále: po třech bossech přijdou všichni najednou. Kdo je odvolá, vyhrál.
+        this.nextBossAt = Infinity;
+        this.finale = true;
+        BOSSES.forEach((def, i) => {
+          const a = (i / BOSSES.length) * Math.PI * 2 + Math.random();
+          const x = this.player.x + Math.cos(a) * SPAWN_RADIUS;
+          const y = this.player.y + Math.sin(a) * SPAWN_RADIUS;
+          this.spawn(def, x, y, FINALE_HP).setPushable(false);
+        });
+        this.banner('KOALIČNÍ VYJEDNÁVÁNÍ!\nJdou na tebe všichni tři.', '#e0483a');
+      } else {
+        this.nextBossAt += BOSS_INTERVAL;
+        const [x, y] = ringPoint();
+        // Každý další boss má víc životů.
+        const def = BOSSES[this.bossCount - 1];
+        this.spawn(def, x, y, 1 + (this.bossCount - 1) * 0.6).setPushable(false);
+        this.banner(`${def.name.toUpperCase()} PŘICHÁZÍ!\n${Phaser.Utils.Array.GetRandom(def.quotes)}`, '#e0483a');
+      }
       audio.play('boss');
     }
 
@@ -557,7 +722,7 @@ export class GameScene extends Phaser.Scene {
       this.gems.add(gem);
     };
     if (def.boss) {
-      this.boss = null;
+      this.bossKills++;
       for (let i = 0; i < 20; i++) {
         const a = Math.random() * Math.PI * 2;
         const r = 40 + Math.random() * 180;
@@ -575,6 +740,11 @@ export class GameScene extends Phaser.Scene {
     const puff = this.add.circle(e.x, e.y - e.displayHeight * 0.3, e.displayWidth * 0.25, 0xffffff, 0.7).setDepth(e.y);
     this.tweens.add({ targets: puff, scale: 1.8, alpha: 0, duration: 220, onComplete: () => puff.destroy() });
     e.destroy();
+    if (def.boss && this.finale && this.bosses().length === 0) this.win();
+  }
+
+  private bosses() {
+    return (this.enemies.getChildren() as Sprite[]).filter((e) => e.active && (e.getData('def') as EnemyDef).boss);
   }
 
   // ---------- zkušenosti a level up ----------
@@ -607,7 +777,33 @@ export class GameScene extends Phaser.Scene {
     this.freeze(true);
     audio.play('levelup');
 
-    const picks = Phaser.Utils.Array.Shuffle([...UPGRADES]).slice(0, 3);
+    // V nabídce jsou vylepšení postavy i zbraně navíc (nové nebo další úroveň).
+    interface Choice {
+      name: string;
+      desc: string;
+      take: () => void;
+    }
+    const choices: Choice[] = UPGRADES.map((u) => {
+      const text = this.def.upgradeText?.[u.id] ?? u; // postava může mít vlastní název vylepšení
+      return {
+        name: text.name,
+        desc: text.desc,
+        take: () => {
+          u.apply(this.stats);
+          if (u.heal) this.hp = Math.min(this.stats.maxHp, this.hp + u.heal);
+        },
+      };
+    });
+    for (const w of WEAPONS) {
+      const next = (this.weapons[w.id] ?? 0) + 1;
+      if (next > w.desc.length) continue;
+      choices.push({
+        name: next === 1 ? w.name : `${w.name} ${next}`,
+        desc: (next === 1 ? 'NOVÁ ZBRAŇ\n' : '') + w.desc[next - 1],
+        take: () => (this.weapons[w.id] = next),
+      });
+    }
+    const picks = Phaser.Utils.Array.Shuffle(choices).slice(0, 3);
     const objects: Phaser.GameObjects.GameObject[] = [];
     const ui = <T extends Phaser.GameObjects.Rectangle | Phaser.GameObjects.Text>(o: T) => {
       o.setScrollFactor(0).setDepth(UI_DEPTH + 10);
@@ -619,12 +815,11 @@ export class GameScene extends Phaser.Scene {
     ui(this.label(GAME_W / 2, 190, `LEVEL ${this.level}!`, 84, '#ee8a3c'));
     ui(this.label(GAME_W / 2, 290, Phaser.Utils.Array.GetRandom(this.def.quotes.levelUp), 36, '#e8e6e1'));
 
-    const choose = (u: Upgrade) => {
+    const choose = (u: Choice) => {
       this.input.keyboard!.off('keydown', onKey);
       objects.forEach((o) => o.destroy());
       audio.play('click');
-      u.apply(this.stats);
-      if (u.heal) this.hp = Math.min(this.stats.maxHp, this.hp + u.heal);
+      u.take();
       this.choosing = false;
       this.freeze(false);
     };
@@ -643,9 +838,8 @@ export class GameScene extends Phaser.Scene {
       card.on('pointerout', () => card.setFillStyle(0x1f232b));
       card.on('pointerdown', () => choose(u));
       ui(this.label(x, 500, `${i + 1}`, 44, '#9a9fa8'));
-      const text = this.def.upgradeText?.[u.id] ?? u; // postava může mít vlastní název vylepšení
-      ui(this.label(x, 590, text.name, 44, '#ee8a3c'));
-      ui(this.label(x, 690, text.desc, 32, '#e8e6e1'));
+      ui(this.label(x, 590, u.name, 44, '#ee8a3c'));
+      ui(this.label(x, 690, u.desc, 32, '#e8e6e1'));
     });
     ui(this.label(GAME_W / 2, 900, 'Vyber kliknutím nebo klávesou 1, 2, 3', 30, '#9a9fa8'));
   }
@@ -675,7 +869,19 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // ---------- smrt ----------
+  // ---------- konec pokusu ----------
+
+  // Finální koalice je odvolaná: výhra.
+  private win() {
+    this.dead = true;
+    this.updateHud();
+    this.physics.pause();
+    this.anims.pauseAll();
+    audio.stopMusic();
+    audio.play('levelup');
+    this.cameras.main.flash(500, 255, 240, 200);
+    this.time.delayedCall(1400, () => this.showEndScreen(true));
+  }
 
   private die() {
     this.dead = true;
@@ -688,16 +894,17 @@ export class GameScene extends Phaser.Scene {
     audio.play('death');
     // Truplik se skácí na záda, pak teprve naskočí tabulka.
     this.tweens.add({ targets: this.player, angle: this.player.flipX ? -90 : 90, duration: 450, ease: 'Bounce.easeOut' });
-    this.time.delayedCall(900, () => this.showDeathScreen());
+    this.time.delayedCall(900, () => this.showEndScreen(false));
   }
 
-  private showDeathScreen() {
+  private showEndScreen(won: boolean) {
     const run: Run = {
       character: this.def.id,
       time: this.elapsed,
       level: this.level,
       kills: this.kills,
       date: new Date().toISOString(),
+      won,
     };
     // Pokusy s ladicími parametry se do žebříčku nepočítají.
     const debug = location.search.length > 1;
@@ -707,9 +914,20 @@ export class GameScene extends Phaser.Scene {
     const depth = UI_DEPTH + 10;
     const ui = (o: Phaser.GameObjects.Rectangle | Phaser.GameObjects.Text) => o.setScrollFactor(0).setDepth(depth);
     ui(this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x000000, 0.72));
-    ui(this.label(GAME_W / 2, 150, `${this.def.name.toUpperCase()} PADL`, 110, '#e0483a'));
-    ui(this.label(GAME_W / 2, 260, Phaser.Utils.Array.GetRandom(this.def.quotes.death), 42, '#e8e6e1'));
-    const stats = `Přežil ${formatTime(this.elapsed)}   ·   level ${this.level}   ·   ${this.kills} odvolaných politiků`;
+    // Zlaťáky do obchodu: za odvolané, za bosse, za přežitý čas a za výhru.
+    const earned = debug
+      ? 0
+      : Math.round((this.kills + this.bossKills * 25 + Math.floor(this.elapsed / 10) + (won ? 200 : 0)) * goldMultiplier());
+    const total = debug ? 0 : addGold(earned);
+    if (won) {
+      ui(this.label(GAME_W / 2, 150, 'KOALICE ODVOLÁNA!', 110, '#f6d76a'));
+      ui(this.label(GAME_W / 2, 260, `${this.def.name} vyhrál volby. ${Phaser.Utils.Array.GetRandom(this.def.quotes.levelUp)}`, 42, '#e8e6e1'));
+    } else {
+      ui(this.label(GAME_W / 2, 150, `${this.def.name.toUpperCase()} PADL`, 110, '#e0483a'));
+      ui(this.label(GAME_W / 2, 260, Phaser.Utils.Array.GetRandom(this.def.quotes.death), 42, '#e8e6e1'));
+    }
+    if (!debug) ui(this.label(GAME_W / 2, 895, `+${earned} zlaťáků   ·   celkem ${total}   ·   utratíš je v obchodě v menu`, 34, '#f6d76a'));
+    const stats = `${won ? 'Čas' : 'Přežil'} ${formatTime(this.elapsed)}   ·   level ${this.level}   ·   ${this.kills} odvolaných politiků`;
     ui(this.label(GAME_W / 2, 370, stats, 40, '#e8e6e1'));
     const verdict = rank === 1 ? 'Nový rekord!' : rank > 0 ? `${rank}. místo v žebříčku` : 'Do žebříčku to nestačilo.';
     ui(this.label(GAME_W / 2, 440, verdict, 40, rank === 1 ? '#ee8a3c' : '#9a9fa8'));
@@ -815,14 +1033,17 @@ export class GameScene extends Phaser.Scene {
       42,
     );
     this.hudTaunt.setText(ready ? `MEZERNÍK / klik · ${this.def.ability.name}` : `${this.def.ability.name} ${Math.ceil(wait)} s`);
-    // Boss
-    const boss = this.boss?.active ? this.boss : null;
+    // Boss (ve finále společný ukazatel celé koalice)
+    const bosses = this.bosses();
+    const boss = bosses[0];
     this.hudBoss.setVisible(!!boss);
     if (boss) {
-      const ratio = (boss.getData('hp') as number) / (boss.getData('maxHp') as number);
+      const sum = (key: string) => bosses.reduce((n, b) => n + (b.getData(key) as number), 0);
+      const full = this.finale ? BOSSES.reduce((n, b) => n + b.hp * FINALE_HP, 0) : sum('maxHp');
+      const ratio = Math.min(1, sum('hp') / full);
       g.fillStyle(0x000000, 0.6).fillRect(GAME_W / 2 - 404, GAME_H - 94, 808, 38);
       g.fillStyle(0xc8324a, 1).fillRect(GAME_W / 2 - 400, GAME_H - 90, 800 * Math.max(0, ratio), 30);
-      this.hudBoss.setText((boss.getData('def') as EnemyDef).name);
+      this.hudBoss.setText(this.finale ? `Koalice (zbývá ${bosses.length})` : (boss.getData('def') as EnemyDef).name);
     }
   }
 }

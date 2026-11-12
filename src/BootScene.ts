@@ -13,7 +13,7 @@ export class BootScene extends Phaser.Scene {
       this.load.spritesheet(c.sheet, `assets/${c.sheet}.png`, { frameWidth: 128, frameHeight: 128 });
     for (const e of [...ENEMIES, ...BOSSES])
       this.load.spritesheet(e.sheet, `assets/${e.sheet}.png`, { frameWidth: e.frameSize, frameHeight: e.frameSize });
-    for (const key of ['gem', 'grass', 'arrow', 'leaflet', 'donut', 'pixel', 'tree', 'rock', 'bush']) this.load.image(key, `assets/${key}.png`);
+    for (const key of ['gem', 'grass', 'arrow', 'leaflet', 'donut', 'pixel', 'tree', 'rock', 'bush', 'boomerang', 'shuriken', 'hammer']) this.load.image(key, `assets/${key}.png`);
   }
 
   create() {

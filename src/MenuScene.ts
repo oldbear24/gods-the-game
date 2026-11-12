@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { audio } from './audio';
 import { CHARACTERS, selectedCharacter, rememberCharacter } from './characters';
 import { loadScores, type Run } from './scores';
+import { gold } from './meta';
 import { GAME_W, GAME_H, label, formatTime } from './ui';
 
 export class MenuScene extends Phaser.Scene {
@@ -64,6 +65,14 @@ export class MenuScene extends Phaser.Scene {
       '#9a9fa8',
     );
 
+    const shop = label(this, 1500, 985, `O = obchod  ·  ${gold()} zlaťáků`, 34, '#f6d76a').setInteractive({ useHandCursor: true });
+    const openShop = () => {
+      audio.unlock();
+      audio.play('click');
+      this.scene.start('shop');
+    };
+    shop.once('pointerdown', openShop);
+
     const play = () => {
       audio.unlock();
       audio.play('click');
@@ -79,6 +88,7 @@ export class MenuScene extends Phaser.Scene {
     kb.on('keydown-A', () => step(-1));
     kb.on('keydown-D', () => step(1));
     kb.on('keydown-M', () => audio.toggleMute());
+    kb.once('keydown-O', openShop);
   }
 }
 
@@ -90,7 +100,7 @@ export function drawScores(scene: Phaser.Scene, x: number, y: number, runs: Run[
     const mine = highlight !== null && run.date === highlight.date && run.time === highlight.time;
     const who = CHARACTERS[run.character]?.name ?? '?';
     const text = `${i + 1}.  ${who}  ${formatTime(run.time)}  ·  level ${run.level}  ·  ${run.kills} odvolaných`;
-    made.push(label(scene, x, y + i * 62, text, 30, mine ? '#ee8a3c' : '#e8e6e1'));
+    made.push(label(scene, x, y + i * 62, text, 30, mine ? '#ee8a3c' : run.won ? '#f6d76a' : '#e8e6e1'));
   });
   made.forEach((t) => t.setDepth(depth));
   return made;

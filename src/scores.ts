@@ -6,6 +6,7 @@ export interface Run {
   level: number;
   kills: number;
   date: string; // ISO
+  won?: boolean; // porazil finální koalici
 }
 
 const KEY = 'gods.scores';
