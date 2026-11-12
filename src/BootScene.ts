@@ -13,7 +13,7 @@ export class BootScene extends Phaser.Scene {
       this.load.spritesheet(c.sheet, `assets/${c.sheet}.png`, { frameWidth: 128, frameHeight: 128 });
     for (const e of [...ENEMIES, ...BOSSES])
       this.load.spritesheet(e.sheet, `assets/${e.sheet}.png`, { frameWidth: e.frameSize, frameHeight: e.frameSize });
-    for (const key of ['gem', 'grass', 'leaflet', 'donut', 'pixel', 'tree', 'rock', 'bush']) this.load.image(key, `assets/${key}.png`);
+    for (const key of ['gem', 'grass', 'arrow', 'leaflet', 'donut', 'pixel', 'tree', 'rock', 'bush']) this.load.image(key, `assets/${key}.png`);
   }
 
   create() {
@@ -26,7 +26,7 @@ export class BootScene extends Phaser.Scene {
       this.anims.create({ key: e.id, frames: this.anims.generateFrameNumbers(e.sheet, {}), frameRate: 4, repeat: -1 });
 
     const params = new URLSearchParams(location.search);
-    const debug = ['t', 'boss', 'bot', 'speed', 'skip'].some((p) => params.has(p));
+    const debug = ['t', 'boss', 'bot', 'speed', 'skip', 'char'].some((p) => params.has(p));
     this.scene.start(debug ? 'game' : 'menu');
   }
 }

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { CHARACTERS, type CharacterDef, type Stats } from './characters';
+import { CHARACTERS, THROWN_QUOTES, selectedCharacter, type CharacterDef, type Stats } from './characters';
 import { ENEMIES, BOSSES, BOSS_INTERVAL, type EnemyDef } from './enemies';
 import { UPGRADES, type Upgrade } from './upgrades';
 import { audio } from './audio';
@@ -13,6 +13,7 @@ const HURT_COOLDOWN = 0.7;
 const AURA_RADIUS = 190;
 const TAUNT_RADIUS = 420;
 const TAUNT_DURATION = 4;
+const THROW_RADIUS = 300;
 const DECOR_CELL = 480;
 const REGEN_PER_SECOND = 1; // tank se pomalu léčí sám
 
@@ -25,6 +26,8 @@ export class GameScene extends Phaser.Scene {
   private player!: Sprite;
   private enemies!: Phaser.Physics.Arcade.Group;
   private shots!: Phaser.Physics.Arcade.Group;
+  private arrows!: Phaser.Physics.Arcade.Group;
+  private charId = '';
   private gems!: Phaser.GameObjects.Group;
   private ground!: Phaser.GameObjects.TileSprite;
   private auraRing!: Phaser.GameObjects.Arc;
@@ -67,6 +70,12 @@ export class GameScene extends Phaser.Scene {
     super('game');
   }
 
+  // Postavu předává menu; při restartu nebo ladicím startu zůstává poslední vybraná.
+  init(data: { character?: string }) {
+    if (data.character) this.charId = data.character;
+    else if (!this.charId) this.charId = selectedCharacter();
+  }
+
   create() {
     // Ladicí parametry v adrese: ?t=120 začne ve 2:00, ?boss=20 pošle prvního bosse ve 20. vteřině,
     // ?bot=1 hraje sám a ?speed=5 zrychlí čas (obojí na zkoušení vyvážení).
@@ -78,7 +87,7 @@ export class GameScene extends Phaser.Scene {
     this.anims.globalTimeScale = this.speed;
     this.time.timeScale = this.speed;
 
-    this.def = CHARACTERS.truplik;
+    this.def = CHARACTERS[this.charId];
     this.stats = { ...this.def.stats };
     this.hp = this.stats.maxHp;
     this.xp = 0;
@@ -116,6 +125,8 @@ export class GameScene extends Phaser.Scene {
 
     this.enemies = this.physics.add.group();
     this.shots = this.physics.add.group();
+    this.arrows = this.physics.add.group();
+    this.physics.add.overlap(this.arrows, this.enemies, (a, e) => this.arrowHit(a as Sprite, e as Sprite));
     this.gems = this.add.group();
     this.physics.add.collider(this.enemies, this.enemies);
     this.physics.add.overlap(this.player, this.enemies, (_p, e) =>
@@ -132,7 +143,7 @@ export class GameScene extends Phaser.Scene {
 
     this.keys = this.input.keyboard!.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,ESC,M') as Record<string, Key>;
 
-    // Provokace jde spustit i kliknutím myši (mimo výběr vylepšení a pauzu).
+    // Schopnost jde spustit i kliknutím myši (mimo výběr vylepšení a pauzu).
     this.tauntClicked = false;
     this.input.on('pointerdown', () => {
       if (!this.choosing && !this.paused && !this.dead) this.tauntClicked = true;
@@ -164,7 +175,7 @@ export class GameScene extends Phaser.Scene {
 
     this.hp = Math.min(this.stats.maxHp, this.hp + REGEN_PER_SECOND * dt);
     this.movePlayer();
-    if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE) || this.tauntClicked || this.botWantsTaunt()) this.taunt();
+    if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE) || this.tauntClicked || this.botWantsTaunt()) this.useAbility();
     this.tauntClicked = false;
     this.moveEnemies();
     this.enemyBark();
@@ -209,9 +220,10 @@ export class GameScene extends Phaser.Scene {
     if (this.attackTimer > 0) return;
     const { attackRange: range, attackArc: arc, damage } = this.stats;
     const p = this.player;
+    const attack = this.def.attack;
 
     let target: Sprite | null = null;
-    let best = range * 1.15;
+    let best = attack.kind === 'ranged' ? range : range * 1.15;
     for (const e of this.enemies.getChildren() as Sprite[]) {
       const dist = Phaser.Math.Distance.Between(p.x, p.y, e.x, e.y);
       if (dist < best) {
@@ -226,6 +238,17 @@ export class GameScene extends Phaser.Scene {
     audio.play('swing');
     const angle = Phaser.Math.Angle.Between(p.x, p.y, target.x, target.y);
     p.setFlipX(Math.cos(angle) > 0);
+
+    if (attack.kind === 'ranged') {
+      // Šíp letí z výšky luku na trup nepřítele a zmizí na konci dostřelu.
+      const y = p.y - 62;
+      const a = Phaser.Math.Angle.Between(p.x, y, target.x, target.y - 40);
+      const arrow = this.arrows.create(p.x, y, attack.sprite) as Sprite;
+      arrow.setScale(2).setRotation(a).setCircle(6, 8, -2).setDepth(UI_DEPTH - 20);
+      arrow.setVelocity(Math.cos(a) * attack.speed, Math.sin(a) * attack.speed);
+      arrow.setData({ damage, pierce: attack.pierce, hit: new Set<Sprite>(), dieAt: this.elapsed + range / attack.speed });
+      return;
+    }
 
     for (const e of [...this.enemies.getChildren()] as Sprite[]) {
       const dist = Phaser.Math.Distance.Between(p.x, p.y, e.x, e.y);
@@ -245,10 +268,69 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: slash, alpha: 0, duration: 200, onComplete: () => slash.destroy() });
   }
 
-  // Provokace: odhodí a omráčí nepřátele kolem, na pár vteřin půlí přijaté poškození.
-  private taunt() {
+  private arrowHit(arrow: Sprite, e: Sprite) {
+    const hit = arrow.getData('hit') as Set<Sprite>;
+    if (!arrow.active || !e.active || hit.has(e)) return;
+    hit.add(e);
+    this.damageEnemy(e, arrow.getData('damage') as number, 140, 0.1, true);
+    const pierce = (arrow.getData('pierce') as number) - 1;
+    if (pierce < 0) arrow.destroy();
+    else arrow.setData('pierce', pierce);
+  }
+
+  // Speciální schopnost na mezerník podle postavy.
+  private useAbility() {
     if (this.elapsed < this.tauntReadyAt) return;
     this.tauntReadyAt = this.elapsed + this.stats.tauntCooldown;
+    if (this.def.ability.kind === 'throw') this.throwTruplik();
+    else this.taunt();
+  }
+
+  // Hod Truplem: Jiry hodí Truplika na nejbližší hlouček; kde dopadne, všechny zraní a omráčí.
+  private throwTruplik() {
+    const p = this.player;
+    let target: Sprite | null = null;
+    let best = 700;
+    for (const e of this.enemies.getChildren() as Sprite[]) {
+      const dist = Phaser.Math.Distance.Between(p.x, p.y, e.x, e.y);
+      if (dist < best) {
+        best = dist;
+        target = e;
+      }
+    }
+    const from = { x: p.x, y: p.y - 60 };
+    const to = target ? { x: target.x, y: target.y } : { x: p.x + (p.flipX ? 350 : -350), y: p.y };
+    audio.play('swing');
+    this.float(p.x, p.y - 220, Phaser.Utils.Array.GetRandom(this.def.quotes.ability), '#ffc27a', 34, 1800);
+
+    const trupl = this.add.image(from.x, from.y, 'truplik', 0).setScale(2).setDepth(UI_DEPTH - 30);
+    this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: 520,
+      onUpdate: (tw) => {
+        const t = tw.getValue() ?? 0;
+        trupl.setPosition(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t - Math.sin(Math.PI * t) * 260);
+        trupl.setAngle(t * 720);
+      },
+      onComplete: () => {
+        trupl.setAngle(90).setDepth(to.y);
+        audio.play('taunt');
+        this.cameras.main.shake(180, 0.009);
+        const ring = this.add.circle(to.x, to.y, 40, 0xee8a3c, 0.25).setStrokeStyle(8, 0xee8a3c, 0.9).setDepth(to.y - 500);
+        this.tweens.add({ targets: ring, scale: THROW_RADIUS / 40, alpha: 0, duration: 380, onComplete: () => ring.destroy() });
+        this.float(to.x, to.y - 150, Phaser.Utils.Array.GetRandom(THROWN_QUOTES), '#ff9a6a', 32, 1800);
+        for (const e of [...this.enemies.getChildren()] as Sprite[]) {
+          if (Phaser.Math.Distance.Between(to.x, to.y, e.x, e.y) <= THROW_RADIUS)
+            this.damageEnemy(e, this.stats.damage * 4, 600, 1, true);
+        }
+        this.tweens.add({ targets: trupl, alpha: 0, delay: 900, duration: 400, onComplete: () => trupl.destroy() });
+      },
+    });
+  }
+
+  // Provokace: odhodí a omráčí nepřátele kolem, na pár vteřin půlí přijaté poškození.
+  private taunt() {
     this.tauntUntil = this.elapsed + TAUNT_DURATION;
     audio.play('taunt');
     const p = this.player;
@@ -256,7 +338,7 @@ export class GameScene extends Phaser.Scene {
     const ring = this.add.circle(p.x, p.y - 20, 40, 0xee8a3c, 0).setStrokeStyle(8, 0xee8a3c, 0.9).setDepth(p.y - 500);
     this.tweens.add({ targets: ring, scale: TAUNT_RADIUS / 40, alpha: 0, duration: 380, onComplete: () => ring.destroy() });
     this.cameras.main.shake(140, 0.006);
-    this.float(p.x, p.y - 290, Phaser.Utils.Array.GetRandom(this.def.quotes.taunt), '#ffc27a', 34, 1800);
+    this.float(p.x, p.y - 290, Phaser.Utils.Array.GetRandom(this.def.quotes.ability), '#ffc27a', 34, 1800);
 
     for (const e of [...this.enemies.getChildren()] as Sprite[]) {
       if (Phaser.Math.Distance.Between(p.x, p.y, e.x, e.y) <= TAUNT_RADIUS)
@@ -287,7 +369,7 @@ export class GameScene extends Phaser.Scene {
     }
     const p = this.player;
     if (Math.random() < this.stats.block) {
-      this.float(p.x, p.y - 230, 'BLOK!', '#9bd3ff', 36);
+      this.float(p.x, p.y - 230, this.def.blockText, '#9bd3ff', 36);
       audio.play('block');
       return;
     }
@@ -443,7 +525,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateShots() {
-    for (const s of [...this.shots.getChildren()] as Sprite[])
+    for (const s of [...this.shots.getChildren(), ...this.arrows.getChildren()] as Sprite[])
       if (this.elapsed >= (s.getData('dieAt') as number)) s.destroy();
   }
 
@@ -561,8 +643,9 @@ export class GameScene extends Phaser.Scene {
       card.on('pointerout', () => card.setFillStyle(0x1f232b));
       card.on('pointerdown', () => choose(u));
       ui(this.label(x, 500, `${i + 1}`, 44, '#9a9fa8'));
-      ui(this.label(x, 590, u.name, 44, '#ee8a3c'));
-      ui(this.label(x, 690, u.desc, 32, '#e8e6e1'));
+      const text = this.def.upgradeText?.[u.id] ?? u; // postava může mít vlastní název vylepšení
+      ui(this.label(x, 590, text.name, 44, '#ee8a3c'));
+      ui(this.label(x, 690, text.desc, 32, '#e8e6e1'));
     });
     ui(this.label(GAME_W / 2, 900, 'Vyber kliknutím nebo klávesou 1, 2, 3', 30, '#9a9fa8'));
   }
@@ -731,7 +814,7 @@ export class GameScene extends Phaser.Scene {
       372 * (ready ? 1 : 1 - wait / this.stats.tauntCooldown),
       42,
     );
-    this.hudTaunt.setText(ready ? 'MEZERNÍK / klik · Provokace' : `Provokace ${Math.ceil(wait)} s`);
+    this.hudTaunt.setText(ready ? `MEZERNÍK / klik · ${this.def.ability.name}` : `${this.def.ability.name} ${Math.ceil(wait)} s`);
     // Boss
     const boss = this.boss?.active ? this.boss : null;
     this.hudBoss.setVisible(!!boss);

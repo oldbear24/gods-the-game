@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Canvas, encodePNG } from './px.mjs';
 import { drawTruplik } from './truplik.mjs';
+import { drawJiry, drawArrow } from './jiry.mjs';
 import { drawGem, drawGrass } from './props.mjs';
 import { drawTree, drawRock, drawBush } from './monsters.mjs';
 import { drawPolitician, drawLeaflet, drawDonut, drawPixelShot } from './politicians.mjs';
@@ -32,6 +33,29 @@ save(
     drawTruplik('c', { bob: 1, swing: true }),
   ]),
 );
+
+// Jiry má stejné pořadí snímků jako Truplik; 4 = natažený luk.
+save(
+  'jiry.png',
+  sheet([
+    drawJiry(),
+    drawJiry({ bob: 1 }),
+    drawJiry({ bob: -1, liftL: 4 }),
+    drawJiry({ bob: -1, liftR: 4 }),
+    drawJiry({ draw: true }),
+  ]),
+);
+save('arrow.png', drawArrow());
+
+// Kontrolní obrázek hratelných postav vedle sebe.
+{
+  const frames = [drawTruplik('c'), drawJiry(), drawJiry({ bob: -1, liftL: 4 }), drawJiry({ draw: true })];
+  const out = new Canvas(frames.length * 128 * 3, 128 * 3);
+  out.clear('#3f6b3a');
+  frames.forEach((f, i) => out.blit(f, i * 384, 0, 3));
+  fs.mkdirSync(path.join(root, 'design'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'design', 'postavy-prehled.png'), encodePNG(out));
+}
 
 // Politici: všichni na mřížce 72×72; bossové se ve hře jen víc zvětší (viz src/enemies.ts).
 const regular = ['fiala', 'rakusan', 'zeman', 'okamura'];
